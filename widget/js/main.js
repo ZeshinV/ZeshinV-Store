@@ -10,7 +10,14 @@ var ZV = (function () {
   var tab = 0, sel = 0, items = [], busy = false;
   var $ = function (id) { return document.getElementById(id); };
 
+  function demoReply(cmd) {
+    if (cmd.indexOf("wifi") === 0) return "== Wireless ==\nNESSUNA interfaccia wireless registrata\n\n== VERDETTO ==\nALTA probabilita' di problema scheda wifi";
+    if (cmd.indexOf("apps list") === 0) return "== NATIVE ==\nATTIVA 111477000562 13704KB TIMVISION\nPROTETTA 20121000004 10968KB Web_Browser\nATTIVA 111299000190 2352KB La_Gazzetta_dello_Sport\n== DISATTIVATE ==";
+    if (cmd.indexOf("status") === 0) return "== MEMORIA ==\nMemTotal: 509076 kB\nMemFree: 28068 kB\nMemFree: 28068 kB\n== CPU load ==\n1.38 1.23 0.99";
+    return "OK";
+  }
   function xhr(url, cb) {
+    if (DEMO && url.indexOf("catalog") >= 0) { cb('{"apps":[{"id":"a","name":"App di prova","version":"1.0","desc":"Esempio"},{"id":"b","name":"Lettore video","version":"2.1","desc":"x"},{"id":"c","name":"Meteo","version":"0.9","desc":"x"}]}'); return; }
     var r = new XMLHttpRequest();
     r.onreadystatechange = function () {
       if (r.readyState === 4) cb(r.status === 200 || r.status === 0 ? r.responseText : "ERRORE HTTP " + r.status);
@@ -18,7 +25,9 @@ var ZV = (function () {
     r.open("GET", url, true);
     r.send();
   }
+  var DEMO = (typeof location !== "undefined" && /[?&]demo/.test(location.search || ""));
   function bridge(cmd, cb) {
+    if (DEMO) { cb(demoReply(cmd)); return; }
     xhr(CFG.bridge + "?token=" + CFG.token + "&cmd=" + encodeURIComponent(cmd).replace(/%20/g, "+"), cb);
   }
   function out(t) { $("out").innerHTML = String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").substring(0, 4500); }
@@ -85,7 +94,7 @@ var ZV = (function () {
         { label: "Diagnostica WiFi", act: function () { out("Analisi..."); bridge("wifi", out); } },
         { label: "Diagnostica completa", act: function () { out("Analisi..."); bridge("diag", out); } },
         { label: "Ping 8.8.8.8", act: function () { out("Ping..."); bridge("ping 8.8.8.8", out); } },
-        { label: "Ping gateway Google DNS 1.1.1.1", act: function () { bridge("ping 1.1.1.1", out); } }
+        { label: "Ping 1.1.1.1", act: function () { bridge("ping 1.1.1.1", out); } }
       ]);
     }
   }
@@ -103,12 +112,12 @@ var ZV = (function () {
 
   return {
     init: function () {
-      if (!CFG.token) out("Configura il token in js/main.js (vedi README).");
+      if (!CFG.token && !DEMO) out("Configura il token in js/main.js (vedi README).");
       document.onkeydown = function (e) { e = e || window.event; onKey(e.keyCode); };
       try { new Common.API.Widget().sendReadyEvent(); } catch (e) {} // assente nel browser desktop (test)
       loadTab();
       setInterval(function () {
-        if (CFG.token) bridge("status", function (t) {
+        if (CFG.token || DEMO) bridge("status", function (t) {
           var m = t.match(/MemFree:\s+(\d+)/);
           if (m) $("mem").innerHTML = "RAM libera " + Math.round(m[1] / 1024) + " MB";
         });
