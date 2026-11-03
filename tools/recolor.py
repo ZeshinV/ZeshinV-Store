@@ -16,7 +16,7 @@ from PIL import Image
 LO, HI, CENTER = 165.0, 260.0, 215.0
 
 
-def shift_rgb(rgb, delta):
+def shift_rgb(rgb, delta, smul=1.0, vadd=0.0):
     """rgb: uint8 array (...,3). Ruota la tonalita' dei soli pixel blu saturi."""
     x = rgb.astype(np.float32) / 255.0
     r, g, b = x[..., 0], x[..., 1], x[..., 2]
@@ -29,7 +29,9 @@ def shift_rgb(rgb, delta):
     if not mask.any():
         return rgb, 0
     h2 = np.where(mask, (h + delta) % 360.0, h)
-    c = mx * s
+    s2 = np.where(mask, s * smul, s)
+    mx2 = np.where(mask, mx + vadd * (1 - mx), mx)
+    c = mx2 * s2
     hp = h2 / 60.0
     xx = c * (1 - np.abs(hp % 2 - 1))
     z = np.zeros_like(c)
@@ -37,11 +39,32 @@ def shift_rgb(rgb, delta):
     R = np.choose(idx, [c, xx, z, z, xx, c])
     G = np.choose(idx, [xx, c, c, xx, z, z])
     B = np.choose(idx, [z, z, xx, c, c, xx])
-    m = mx - c
+    m = mx2 - c
     out = np.stack([R + m, G + m, B + m], -1)
     out = np.clip(np.rint(out * 255), 0, 255).astype(np.uint8)
     res = np.where(mask[..., None], out, rgb)
     return res, int(mask.sum())
+
+
+OPT = {'delta': 0.0, 'smul': 1.0, 'vadd': 0.0, 'dark': False}
+
+
+def transform(rgb, alpha):
+    """Accento -> nuovo colore; opzionalmente scurisce i grandi pannelli chiari (immagini >=100px)."""
+    new, n = shift_rgb(rgb, OPT['delta'], OPT['smul'], OPT['vadd'])
+    if OPT['dark'] and rgb.shape[0] >= 100 and rgb.shape[1] >= 100:
+        lum = (rgb.astype(np.float32) @ np.array([0.299, 0.587, 0.114], np.float32)) / 255.0
+        opaque = alpha > 200 if alpha is not None else np.ones(lum.shape, bool)
+        if opaque.any() and lum[opaque].mean() > 0.62:
+            x = new.astype(np.float32) / 255.0
+            mx = x.max(-1); d = mx - x.min(-1)
+            neutral = (np.where(mx == 0, 0, d / np.where(mx == 0, 1, mx)) < 0.2)
+            target = 0.12 + (1.0 - mx) * 0.5          # chiaro -> grigio scuro stile iOS
+            f = np.where(mx > 0, target / np.where(mx == 0, 1, mx), 1.0)
+            dark = np.clip(np.rint(x * f[..., None] * 255), 0, 255).astype(np.uint8)
+            new = np.where(neutral[..., None], dark, new)
+            n += int(neutral.sum())
+    return new, n
 
 
 def recolor_bmp(data, delta):
@@ -62,7 +85,7 @@ def recolor_bmp(data, delta):
         arr = np.frombuffer(bytes(buf[off:off + stride * h]), np.uint8).reshape(h, stride)
         px = arr[:, :w * bp].reshape(h, w, bp).copy()
         rgb = px[..., [2, 1, 0]]  # BGR -> RGB
-        new, n = shift_rgb(rgb, delta)
+        new, n = transform(rgb, px[..., 3] if bp == 4 else None)
         if n == 0:
             return data, 0
         px[..., 2], px[..., 1], px[..., 0] = new[..., 0], new[..., 1], new[..., 2]
@@ -74,7 +97,7 @@ def recolor_bmp(data, delta):
         if len(pal) == 0:
             return data, 0
         rgb = pal[:, [2, 1, 0]].reshape(1, -1, 3)
-        new, n = shift_rgb(rgb, delta)
+        new, n = shift_rgb(rgb, OPT['delta'], OPT['smul'], OPT['vadd'])
         if n == 0:
             return data, 0
         pal[:, 2], pal[:, 1], pal[:, 0] = new[0, :, 0], new[0, :, 1], new[0, :, 2]
@@ -88,7 +111,7 @@ def recolor_png(path, out, delta):
     if im.mode not in ('RGB', 'RGBA'):
         im = im.convert('RGBA')
     a = np.array(im)
-    new, n = shift_rgb(a[..., :3], delta)
+    new, n = transform(a[..., :3], a[..., 3] if im.mode == 'RGBA' else None)
     if n == 0:
         return False
     a[..., :3] = new
@@ -125,21 +148,27 @@ def main():
     ap.add_argument('--smarttv', help='copia di /mtd_appext/SmartTV')
     ap.add_argument('--out', required=True)
     ap.add_argument('--hue', type=float, default=135.0, help='tonalita\' di arrivo 0-360 (135=verde, 20=arancio, 280=viola)')
+    ap.add_argument('--smul', type=float, default=1.0, help='saturazione accento (0.7 = piu\' pastello)')
+    ap.add_argument('--vadd', type=float, default=0.0, help='schiarisce accento 0-1')
+    ap.add_argument('--darken-light', action='store_true', help='SPERIMENTALE: scurisce i grandi pannelli chiari')
+    ap.add_argument('--only', default='', help='elabora solo queste cartelle (separate da virgola)')
     ap.add_argument('--skip', default='MenuAnimation,MultiMedia_TV', help='cartelle Images da ignorare')
     a = ap.parse_args()
     delta = a.hue - CENTER
+    OPT.update(delta=delta, smul=a.smul, vadd=a.vadd, dark=a.darken_light)
+    only = [x for x in a.only.split(',') if x]
     os.makedirs(a.out, exist_ok=True)
     lines = []
     jobs = []
     if a.images:
         for d in sorted(os.listdir(a.images)):
             p = os.path.join(a.images, d)
-            if os.path.isdir(p) and d not in a.skip.split(','):
+            if os.path.isdir(p) and d not in a.skip.split(',') and (not only or d in only):
                 jobs.append((p, 'Images_' + d, '/mtd_rocommon/Images/' + d))
     if a.smarttv:
         for d in sorted(os.listdir(a.smarttv)):
             p = os.path.join(a.smarttv, d, 'icon')
-            if os.path.isdir(p):
+            if os.path.isdir(p) and not only:
                 jobs.append((p, 'SmartTV_%s_icon' % d, '/mtd_appext/SmartTV/%s/icon' % d))
     for src, name, target in jobs:
         tmp = os.path.join(a.out, name)
