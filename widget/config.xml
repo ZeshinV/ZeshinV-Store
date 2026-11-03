@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget>
+  <ver>1.000</ver>
+  <cp>ZeshinV</cp>
+  <category>user</category>
+  <ThumbIcon>images/icon_106.png</ThumbIcon>
+  <BigThumbIcon>images/icon_115.png</BigThumbIcon>
+  <ListIcon>images/icon_95.png</ListIcon>
+  <BigListIcon>images/icon_85.png</BigListIcon>
+  <mouseSupport>0</mouseSupport>
+  <fullwidget>y</fullwidget>
+  <net>y</net>
+  <description>ZeshinV - store e strumenti per UE46ES6200</description>
+  <widgetname>ZeshinV</widgetname>
+</widget>

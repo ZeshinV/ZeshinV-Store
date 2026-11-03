@@ -1,0 +1,14 @@
+{
+  "name": "ZeshinV Store",
+  "model": "UE46ES6200",
+  "apps": [
+    {
+      "id": "demoapp",
+      "name": "App di prova",
+      "version": "1.0",
+      "desc": "Esempio: sostituisci URL e MD5 con quelli reali",
+      "url": "https://zeshinv.github.io/zeshinv-store/apps/demoapp.zip",
+      "md5": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  ]
+}

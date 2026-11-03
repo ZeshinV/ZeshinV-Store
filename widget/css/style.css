@@ -1,0 +1,14 @@
+/* Volutamente leggero: niente animazioni, ombre o trasparenze (la TV e' lenta) */
+html,body{margin:0;padding:0;width:960px;height:540px;background:#101418;color:#e6e6e6;font-family:Arial,sans-serif;overflow:hidden}
+#top{height:50px;line-height:50px;background:#1b2630;padding:0 20px}
+#logo{font-size:26px;font-weight:bold;color:#4fc3f7;margin-right:30px}
+.tab{display:inline-block;padding:0 14px;font-size:20px;color:#9aa}
+.tab.on{color:#fff;background:#2e7d32}
+#mem{float:right;font-size:16px;color:#9aa}
+#list{position:absolute;top:60px;left:20px;width:430px;height:420px;overflow:hidden}
+.item{height:44px;line-height:44px;padding:0 10px;font-size:20px;border-bottom:1px solid #222}
+.item.sel{background:#4fc3f7;color:#000}
+.sub{font-size:14px;color:#889;margin-left:8px}
+.item.sel .sub{color:#033}
+#out{position:absolute;top:60px;left:470px;width:470px;height:420px;overflow:hidden;font-size:13px;line-height:15px;background:#0a0d10;margin:0;padding:6px;white-space:pre-wrap;color:#9f9}
+#foot{position:absolute;bottom:6px;left:20px;font-size:14px;color:#778}

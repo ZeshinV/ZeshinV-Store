@@ -1,0 +1,1 @@
+demoapp|App di prova|1.0|https://zeshinv.github.io/zeshinv-store/apps/demoapp.zip|d41d8cd98f00b204e9800998ecf8427e|Esempio: sostituisci URL e MD5 con quelli reali
