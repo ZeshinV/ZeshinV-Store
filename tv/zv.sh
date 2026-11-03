@@ -20,8 +20,13 @@ cmd_status() {
   echo "== CPU load =="; cat /proc/loadavg
   echo "== UPTIME =="; uptime
   echo "== SPAZIO =="; df 2>/dev/null
-  echo "== TOP processi per RAM =="
-  ps 2>/dev/null | sort -k3 -n -r 2>/dev/null | head -n 12
+  echo "== RAM realmente disponibile (free+buffers+cached) =="
+  awk '/^MemTotal/{t=$2} /^MemFree/{f=$2} /^Buffers/{b=$2} /^Cached/{c=$2} END{printf "%d MB su %d MB\n",(f+b+c)/1024,t/1024}' /proc/meminfo
+  echo "== TOP processi per RAM (RSS, kB) =="
+  for p in /proc/[0-9]*; do
+    r=$(grep -m1 VmRSS "$p/status" 2>/dev/null | tr -s ' \t' ' ' | cut -d' ' -f2)
+    [ -n "$r" ] && echo "$r $(basename "$p") $(tr '\0' ' ' < "$p/cmdline" 2>/dev/null | cut -c1-45)"
+  done | sort -n -r | head -n 12
 }
 
 cmd_freeram() {
