@@ -70,11 +70,13 @@ var ZV = (function () {
       bridge("apps list", function (t) {
         var lines = t.split("\n"), a = [];
         for (var i = 0; i < lines.length; i++) {
-          var m = lines[i].match(/^(ATTIVA|OFF)\s+(\S+)/);
-          if (m) (function (state, id) {
-            a.push({ label: id, sub: state === "OFF" ? "[disattivata] OK=riattiva" : "[attiva] OK=disattiva",
+          var m = lines[i].match(/^(ATTIVA|PROTETTA|OFF)\s+(\S+)\s+\S+\s*(.*)$/);
+          if (m) (function (state, id, name) {
+            var label = (name && name !== "-" ? name.replace(/^- /, "") : "?") + " (" + id + ")";
+            if (state === "PROTETTA") { a.push({ label: label, sub: "[protetta]", act: function () { out("Protetta: non disattivabile da qui."); } }); return; }
+            a.push({ label: label, sub: state === "OFF" ? "[off] OK=riattiva" : "[attiva] OK=disattiva",
               act: function () { bridge("apps " + (state === "OFF" ? "enable " : "disable ") + id, function (r) { out(r); loadTab(); }); } });
-          })(m[1], m[2]);
+          })(m[1], m[2], m[3]);
         }
         setItems(a); out(a.length ? "Le modifiche richiedono riavvio TV.\nSono reversibili." : t);
       });

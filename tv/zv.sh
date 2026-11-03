@@ -87,18 +87,33 @@ cmd_scan() {
   echo; echo "Imposta USER_APPS_DIR / NATIVE_APPS_DIR in zv.conf se diversi da quelli di default."
 }
 
+app_name() {
+  c="$1/config.xml"; [ -f "$c" ] || { echo "?"; return; }
+  n=$(sed -n 's:.*<widgetname>\(.*\)</widgetname>.*:\1:p' "$c" | head -n1)
+  [ -n "$n" ] || n=$(sed -n 's:.*<cp>\(.*\)</cp>.*:\1:p' "$c" | head -n1)
+  [ -n "$n" ] || n=$(sed -n 's:.*<description>\(.*\)</description>.*:\1:p' "$c" | head -n1)
+  echo "${n:-?}" | tr ' ' '_'
+}
+
+# Formato: STATO ID KB NOME   (STATO: ATTIVA = disattivabile, PROTETTA, OFF)
 cmd_apps_list() {
+  ALLOW="$ZV_HOME/disable.allow"
   echo "== NATIVE ($NATIVE_APPS_DIR) =="
-  for d in "$NATIVE_APPS_DIR"/*/; do [ -d "$d" ] && echo "ATTIVA  $(basename "$d")  $(du -sk "$d" 2>/dev/null | cut -f1)KB"; done
+  for d in "$NATIVE_APPS_DIR"/*/; do
+    [ -d "$d" ] || continue
+    id=$(basename "$d"); kb=$(du -sk "$d" 2>/dev/null | cut -f1)
+    if [ -f "$ALLOW" ] && grep -qx "$id" "$ALLOW"; then st=ATTIVA; else st=PROTETTA; fi
+    echo "$st $id ${kb}KB $(app_name "${d%/}")"
+  done
   echo "== DISATTIVATE =="
-  for d in "$DISABLED_DIR"/*/; do [ -d "$d" ] && echo "OFF     $(basename "$d")"; done
+  for d in "$DISABLED_DIR"/*/; do [ -d "$d" ] && echo "OFF $(basename "$d") - $(app_name "${d%/}")"; done
 }
 
 cmd_apps_disable() {
   safe_id "$1" || { echo "ID non valido"; return 1; }
   [ -d "$NATIVE_APPS_DIR/$1" ] || { echo "App non trovata"; return 1; }
-  # protezione: app critiche mai disattivabili
-  case "$1" in *[Ss]ettings*|*[Hh]ub*|*[Ss]ource*|*[Nn]etwork*|*[Ss]upport*) echo "App di sistema protetta, rifiutato"; return 1;; esac
+  # protezione: SOLO gli ID scritti in disable.allow sono disattivabili (vuoto di default)
+  grep -qx "$1" "$ZV_HOME/disable.allow" 2>/dev/null || { echo "Protetta: aggiungi l'ID a $ZV_HOME/disable.allow solo dopo averlo verificato"; return 1; }
   mv "$NATIVE_APPS_DIR/$1" "$DISABLED_DIR/$1" && echo "Disattivata: $1 (riavvia la TV)"
 }
 
