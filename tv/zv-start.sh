@@ -7,3 +7,4 @@ cp $ZV/zv.cgi $ZV/www/cgi-bin/zv.cgi && chmod 755 $ZV/www/cgi-bin/zv.cgi $ZV/zv.
 # Se "httpd" non esiste in busybox, vedi README (alternativa: nc loop)
 busybox httpd -p 8081 -h $ZV/www 2>/dev/null || httpd -p 8081 -h $ZV/www
 echo "ZeshinV bridge su :8081 - token: $(cat $ZV/token)"
+[ -f $ZV/theme.active ] && sh $ZV/zv.sh theme apply "$(cat $ZV/theme.active)"

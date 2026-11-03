@@ -129,28 +129,47 @@ cmd_apps_enable() {
 }
 
 # ---------- TEMA ----------
-# Un tema = cartella in $ZV_HOME/themes/<nome>/ con file "manifest" (una riga: percorso_assoluto_target)
-# e gli stessi file con nome flat. apply fa backup, restore ripristina.
+# Un tema = cartella $ZV_HOME/themes/<nome>/ con un file "manifest": una riga per file,
+#   <percorso_originale_sulla_TV>|<file_sostitutivo_nella_cartella_del_tema>
+# Si usa "mount --bind": NON modifica le partizioni, al riavvio tutto torna originale
+# (a meno che tu non attivi "theme persist").
+MOUNTED="$ZV_HOME/mounted.list"
+
+cmd_theme_scan() {
+  for d in /mtd_exe /mtd_appext /mtd_rocommon /mtd_rwcommon; do
+    echo "== $d =="; mount | grep " $d " | head -n 1
+    echo "file grafici/css/js (primi 60):"
+    find "$d" -maxdepth 6 \( -name '*.png' -o -name '*.jpg' -o -name '*.css' \) 2>/dev/null | head -n 60
+  done
+}
 cmd_theme_list() { ls "$ZV_HOME/themes" 2>/dev/null || echo "(nessun tema installato)"; }
 cmd_theme_apply() {
   safe_id "$1" || { echo "ID non valido"; return 1; }
   T="$ZV_HOME/themes/$1"; [ -f "$T/manifest" ] || { echo "Tema non trovato"; return 1; }
-  while read -r target; do
+  while IFS='|' read -r target src; do
     [ -z "$target" ] && continue
-    case "$target" in /mtd_rwcommon/*|/mtd_down/*|/mtd_exe/*) ;; *) echo "Percorso rifiutato: $target"; return 1;; esac
-    b="$BACKUP_DIR/$(echo "$target" | tr '/' '_')"
-    [ -f "$b" ] || cp "$target" "$b"
-    cp "$T/$(basename "$target")" "$target" && echo "OK $target"
+    case "$target" in /mtd_exe/*|/mtd_appext/*|/mtd_rocommon/*|/mtd_rwcommon/*) ;; *) echo "Percorso rifiutato: $target"; continue;; esac
+    case "$src" in */*|"") echo "Sorgente non valida: $src"; continue;; esac
+    [ -f "$target" ] || { echo "Originale non trovato: $target"; continue; }
+    [ -f "$T/$src" ] || { echo "File tema mancante: $src"; continue; }
+    grep -qx "$target" "$MOUNTED" 2>/dev/null && { echo "Gia' sostituito: $target"; continue; }
+    mount --bind "$T/$src" "$target" && echo "$target" >> "$MOUNTED" && echo "OK $target"
   done < "$T/manifest"
-  echo "Tema applicato (riavvia la TV)"
+  echo "Tema applicato in modo temporaneo. Se qualcosa non va: riavvia la TV."
 }
 cmd_theme_restore() {
-  for b in "$BACKUP_DIR"/*; do
-    [ -f "$b" ] || continue
-    target=$(basename "$b" | tr '_' '/')
-    cp "$b" "$target" && echo "Ripristinato $target"
-  done
+  [ -f "$MOUNTED" ] || { echo "Nessun tema attivo"; return 0; }
+  while read -r target; do
+    [ -n "$target" ] && umount "$target" 2>/dev/null && echo "Ripristinato $target"
+  done < "$MOUNTED"
+  rm -f "$MOUNTED"
 }
+cmd_theme_persist() {
+  safe_id "$1" || { echo "ID non valido"; return 1; }
+  [ -f "$ZV_HOME/themes/$1/manifest" ] || { echo "Tema non trovato"; return 1; }
+  echo "$1" > "$ZV_HOME/theme.active" && echo "Il tema '$1' verra' applicato a ogni avvio (provalo prima senza persist!)"
+}
+cmd_theme_unpersist() { rm -f "$ZV_HOME/theme.active" && echo "Tema automatico disattivato"; }
 
 # ---------- STORE ----------
 cmd_store_list() {
@@ -184,7 +203,7 @@ case "$1" in
   ping) cmd_ping "$2";;
   scan) cmd_scan;;
   apps) case "$2" in list) cmd_apps_list;; disable) cmd_apps_disable "$3";; enable) cmd_apps_enable "$3";; *) echo "apps list|disable|enable <id>";; esac;;
-  theme) case "$2" in list) cmd_theme_list;; apply) cmd_theme_apply "$3";; restore) cmd_theme_restore;; *) echo "theme list|apply <n>|restore";; esac;;
+  theme) case "$2" in scan) cmd_theme_scan;; list) cmd_theme_list;; apply) cmd_theme_apply "$3";; restore) cmd_theme_restore;; persist) cmd_theme_persist "$3";; unpersist) cmd_theme_unpersist;; *) echo "theme scan|list|apply <n>|restore|persist <n>|unpersist";; esac;;
   store) case "$2" in list) cmd_store_list;; install) cmd_store_install "$3";; remove) cmd_store_remove "$3";; *) echo "store list|install|remove <id>";; esac;;
   *) echo "ZeshinV: status freeram diag wifi ping scan apps theme store";;
 esac
